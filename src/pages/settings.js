@@ -3,14 +3,32 @@ import { getSetting, setSetting } from '../db.js';
 import { showToast } from '../utils/ui.js';
 
 export async function renderSettings(container) {
-    const defaultTip = await getSetting('defaultTip', 0);
-    const defaultTax = await getSetting('defaultTax', 10);
-    const defaultService = await getSetting('defaultService', 5);
+  const defaultTip = await getSetting('defaultTip', 0);
+  const defaultTax = await getSetting('defaultTax', 10);
+  const defaultService = await getSetting('defaultService', 5);
+  const geminiApiKey = await getSetting('geminiApiKey', '');
 
-    container.innerHTML = `
+  container.innerHTML = `
     <div class="mb-xl">
       <h2 style="font-size: 1.15rem; font-weight: 700;">Pengaturan</h2>
       <p class="text-xs text-secondary mt-sm">Atur preferensi aplikasi</p>
+    </div>
+
+    <!-- Gemini API Key -->
+    <div class="card mb-lg">
+      <div class="section-title text-sm mb-md">🤖 OCR dengan AI (Gemini)</div>
+      <div class="text-xs text-secondary mb-md">
+        Gunakan Gemini AI untuk scan struk lebih akurat. Dapatkan API key gratis di
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color: var(--accent-primary); text-decoration: underline;">Google AI Studio</a>.
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Gemini API Key</label>
+        <div style="position: relative;">
+          <input type="password" class="form-input" id="geminiApiKey" placeholder="Masukkan API key..." value="${escapeAttr(geminiApiKey)}" style="padding-right: 44px;" />
+          <button type="button" id="toggleKeyVisibility" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; font-size: 1.1rem;" title="Tampilkan/sembunyikan key">👁️</button>
+        </div>
+        ${geminiApiKey ? '<div class="text-xs mt-sm" style="color: var(--accent-primary);">✓ API key tersimpan</div>' : '<div class="text-xs mt-sm text-secondary">Tanpa API key, OCR menggunakan Tesseract.js (kurang akurat)</div>'}
+      </div>
     </div>
 
     <!-- Defaults -->
@@ -100,89 +118,100 @@ export async function renderSettings(container) {
     </div>
   `;
 
-    // Save settings
-    container.querySelector('#saveSettingsBtn').addEventListener('click', async () => {
-        await setSetting('defaultTax', parseFloat(container.querySelector('#defaultTax').value) || 0);
-        await setSetting('defaultService', parseFloat(container.querySelector('#defaultService').value) || 0);
-        await setSetting('defaultTip', parseFloat(container.querySelector('#defaultTip').value) || 0);
-        showToast('Pengaturan disimpan! ✓');
-    });
+  // Toggle API key visibility
+  container.querySelector('#toggleKeyVisibility')?.addEventListener('click', () => {
+    const input = container.querySelector('#geminiApiKey');
+    input.type = input.type === 'password' ? 'text' : 'password';
+  });
 
-    // Export
-    container.querySelector('#exportBtn').addEventListener('click', async () => {
-        const { getAllReceipts, getAllGroups } = await import('../db.js');
-        const data = {
-            version: '1.0.0',
-            exportedAt: new Date().toISOString(),
-            receipts: await getAllReceipts(),
-            groups: await getAllGroups()
-        };
+  // Save settings
+  container.querySelector('#saveSettingsBtn').addEventListener('click', async () => {
+    await setSetting('defaultTax', parseFloat(container.querySelector('#defaultTax').value) || 0);
+    await setSetting('defaultService', parseFloat(container.querySelector('#defaultService').value) || 0);
+    await setSetting('defaultTip', parseFloat(container.querySelector('#defaultTip').value) || 0);
+    await setSetting('geminiApiKey', container.querySelector('#geminiApiKey').value.trim());
+    showToast('Pengaturan disimpan! ✓');
+  });
 
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `splibi_backup_${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        showToast('Data berhasil di-export!');
-    });
+  // Export
+  container.querySelector('#exportBtn').addEventListener('click', async () => {
+    const { getAllReceipts, getAllGroups } = await import('../db.js');
+    const data = {
+      version: '1.0.0',
+      exportedAt: new Date().toISOString(),
+      receipts: await getAllReceipts(),
+      groups: await getAllGroups()
+    };
 
-    // Import
-    container.querySelector('#importBtn').addEventListener('click', () => {
-        container.querySelector('#importFileInput').click();
-    });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `splibi_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Data berhasil di-export!');
+  });
 
-    container.querySelector('#importFileInput').addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+  // Import
+  container.querySelector('#importBtn').addEventListener('click', () => {
+    container.querySelector('#importFileInput').click();
+  });
 
-        try {
-            const text = await file.text();
-            const data = JSON.parse(text);
+  container.querySelector('#importFileInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-            if (!data.receipts && !data.groups) {
-                showToast('Format file tidak valid', 'error');
-                return;
-            }
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
 
-            const { saveReceipt, saveGroup } = await import('../db.js');
+      if (!data.receipts && !data.groups) {
+        showToast('Format file tidak valid', 'error');
+        return;
+      }
 
-            if (data.receipts) {
-                for (const r of data.receipts) {
-                    delete r.id; // Let auto-increment assign new IDs
-                    await saveReceipt(r);
-                }
-            }
+      const { saveReceipt, saveGroup } = await import('../db.js');
 
-            if (data.groups) {
-                for (const g of data.groups) {
-                    delete g.id;
-                    await saveGroup(g);
-                }
-            }
-
-            showToast(`Berhasil import ${data.receipts?.length || 0} struk & ${data.groups?.length || 0} grup!`);
-        } catch (err) {
-            showToast('Gagal membaca file', 'error');
+      if (data.receipts) {
+        for (const r of data.receipts) {
+          delete r.id; // Let auto-increment assign new IDs
+          await saveReceipt(r);
         }
-    });
+      }
 
-    // Clear data
-    container.querySelector('#clearDataBtn').addEventListener('click', async () => {
-        const { confirmDialog } = await import('../utils/ui.js');
-        const confirmed = await confirmDialog('Semua struk dan grup akan dihapus permanen. Lanjutkan?');
-        if (confirmed) {
-            const { getDB } = await import('../db.js');
-            const db = await getDB();
-            const tx = db.transaction(['receipts', 'groups'], 'readwrite');
-            await Promise.all([
-                tx.objectStore('receipts').clear(),
-                tx.objectStore('groups').clear(),
-                tx.done
-            ]);
-            showToast('Semua data dihapus');
-            renderSettings(container);
+      if (data.groups) {
+        for (const g of data.groups) {
+          delete g.id;
+          await saveGroup(g);
         }
-    });
+      }
+
+      showToast(`Berhasil import ${data.receipts?.length || 0} struk & ${data.groups?.length || 0} grup!`);
+    } catch (err) {
+      showToast('Gagal membaca file', 'error');
+    }
+  });
+
+  // Clear data
+  container.querySelector('#clearDataBtn').addEventListener('click', async () => {
+    const { confirmDialog } = await import('../utils/ui.js');
+    const confirmed = await confirmDialog('Semua struk dan grup akan dihapus permanen. Lanjutkan?');
+    if (confirmed) {
+      const { getDB } = await import('../db.js');
+      const db = await getDB();
+      const tx = db.transaction(['receipts', 'groups'], 'readwrite');
+      await Promise.all([
+        tx.objectStore('receipts').clear(),
+        tx.objectStore('groups').clear(),
+        tx.done
+      ]);
+      showToast('Semua data dihapus');
+      renderSettings(container);
+    }
+  });
+}
+
+function escapeAttr(str) {
+  return String(str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
