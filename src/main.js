@@ -7,8 +7,16 @@ import { renderSplitBill } from './pages/split-bill.js';
 import { renderHistory } from './pages/history.js';
 import { renderGroups } from './pages/groups.js';
 import { renderSettings } from './pages/settings.js';
+import { renderOnboarding } from './pages/onboarding.js';
 
 // Register routes
+router.register('/onboarding', {
+  title: 'Selamat Datang',
+  render: renderOnboarding,
+  hideNav: true,
+  hideTopBar: true
+});
+
 router.register('/', {
   title: 'SpliBi',
   render: renderHome

@@ -1,6 +1,8 @@
 // SpliBi - Router Module
 // Lightweight hash-based SPA router
 
+import { getSetting } from './db.js';
+
 export class Router {
   constructor() {
     this.routes = {};
@@ -9,6 +11,7 @@ export class Router {
     this.pageTitle = null;
     this.backBtn = null;
     this.bottomNav = null;
+    this.topBar = null;
   }
 
   init() {
@@ -16,6 +19,7 @@ export class Router {
     this.pageTitle = document.getElementById('pageTitle');
     this.backBtn = document.getElementById('backBtn');
     this.bottomNav = document.getElementById('bottomNav');
+    this.topBar = document.getElementById('topBar');
 
     window.addEventListener('hashchange', () => this.handleRoute());
     this.backBtn.addEventListener('click', () => window.history.back());
@@ -24,8 +28,8 @@ export class Router {
     this.handleRoute();
   }
 
-  register(path, { title, render, hideNav = false, showBack = false }) {
-    this.routes[path] = { title, render, hideNav, showBack };
+  register(path, { title, render, hideNav = false, showBack = false, hideTopBar = false }) {
+    this.routes[path] = { title, render, hideNav, showBack, hideTopBar };
   }
 
   navigate(path) {
@@ -37,6 +41,15 @@ export class Router {
     // Parse path and params
     const [path, queryString] = hash.split('?');
     const params = new URLSearchParams(queryString || '');
+
+    // Onboarding check: redirect first-time users
+    if (path !== '/onboarding') {
+      const onboardingComplete = await getSetting('onboardingComplete', false);
+      if (!onboardingComplete) {
+        this.navigate('/onboarding');
+        return;
+      }
+    }
 
     // Find matching route
     let route = this.routes[path];
@@ -76,6 +89,14 @@ export class Router {
       this.bottomNav.classList.add('hidden');
     } else {
       this.bottomNav.classList.remove('hidden');
+    }
+
+    if (route.hideTopBar) {
+      this.topBar.classList.add('hidden');
+      this.mainContent.style.marginTop = '0';
+    } else {
+      this.topBar.classList.remove('hidden');
+      this.mainContent.style.marginTop = '';
     }
 
     // Update active nav item
